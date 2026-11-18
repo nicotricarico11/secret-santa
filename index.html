@@ -185,8 +185,19 @@
 
       <p class="small">
         Eén deelnemer per regel. Formaat: naam;telefoonnummer.
-        Telefoonnummer is optioneel. Gebruik het internationale
-        formaat zonder spaties, bijvoorbeeld +32470123456.
+        Telefoonnummer is optioneel. Gebruik bij voorkeur het internationale
+        formaat, bijvoorbeeld +32470123456. Namen en telefoonnummers moeten
+        uniek zijn binnen deze loting.
+      </p>
+
+      <label>Wederzijdse uitsluitingen (optioneel)</label>
+      <textarea id="exclusions"
+        placeholder="Emma;Lucas&#10;Noah;Sofie"></textarea>
+      <p class="small">
+        Eén uitgesloten duo per regel, in het formaat naam;naam.
+        De beperking geldt altijd in beide richtingen. Beide namen moeten
+        exact overeenkomen met de deelnemerslijst. Laat leeg als er geen
+        uitsluitingen zijn.
       </p>
 
       <button type="submit" id="drawButton">
@@ -282,28 +293,48 @@
   $("drawForm").addEventListener("submit", async e => {
     e.preventDefault();
 
-    const lines = $("participants").value
-      .split("\n")
-      .map(line => line.trim())
-      .filter(Boolean);
-
-    const people = lines.map(line => {
-      const parts = line.split(";");
-      return {
-        name: parts[0].trim(),
-        phone: (parts[1] || "").trim()
-      };
-    });
-
     $("drawButton").disabled = true;
     $("drawStatus").textContent = "🎲 De loting wordt uitgevoerd...";
     $("linksContainer").classList.add("hidden");
 
     try {
+      const lines = $("participants").value
+        .split("\n")
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const people = lines.map(line => {
+        const parts = line.split(";");
+        return {
+          name: parts[0].trim(),
+          phone: (parts[1] || "").trim()
+        };
+      });
+
+      const exclusionLines = $("exclusions").value
+        .split("\n")
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const exclusions = exclusionLines.map(line => {
+        const parts = line.split(";");
+        if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
+          throw new Error(
+            "Ongeldige uitsluiting. Gebruik per regel het formaat naam;naam."
+          );
+        }
+        return {
+          personA: parts[0].trim(),
+          personB: parts[1].trim()
+        };
+      });
+
       const { data, error } = await db.functions.invoke("create-draw", {
         body: {
           eventName: $("eventName").value,
-          participants: people
+          participants: people,
+          exclusions,
+          requestKey: crypto.randomUUID()
         }
       });
 
@@ -329,7 +360,7 @@
         const share = document.createElement("a");
         share.textContent = "📱 Verstuur via WhatsApp";
         share.href = "https://wa.me/" +
-          person.phone.replace(/\D/g, "") +
+          (person.phone || "").replace(/\D/g, "") +
           "?text=" + encodeURIComponent(
             "🎄 Ho ho ho! Je geheime Secret Santa-link is klaar! " +
             "Ontdek voor wie jij een cadeautje mag kopen: " +
@@ -358,7 +389,8 @@
       $("linksContainer").classList.remove("hidden");
 
     } catch (error) {
-      $("drawStatus").textContent = error.message;
+      $("drawStatus").textContent =
+        error instanceof Error ? error.message : "Loting mislukt.";
     } finally {
       $("drawButton").disabled = false;
     }
