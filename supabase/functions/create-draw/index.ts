@@ -81,13 +81,22 @@ Deno.serve(async (req) => {
 
     const db = createClient(url, serviceKey);
 
-    const { data: admin } = await db
+    
+    const { data: admin, error: adminError } = await db
       .from("admin_users")
       .select("user_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
+    if (adminError) {
+      console.error("ADMIN QUERY ERROR:", adminError);
+      return json({
+        error: "Probleem bij controleren beheerdersrechten."
+      }, 500);
+    }
+
     if (!admin) {
+      console.error("ADMIN NOT FOUND FOR USER:", user.id);
       return json({ error: "Geen beheerrechten." }, 403);
     }
 
