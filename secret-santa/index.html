@@ -1,0 +1,399 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secret Santa 🎄</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --green: #123b2a;
+      --green-light: #20583e;
+      --red: #a92932;
+      --gold: #e7bd68;
+      --cream: #fffaf0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Georgia, serif;
+      color: var(--cream);
+      background:
+        radial-gradient(ellipse at top, #286044, transparent 65%),
+        linear-gradient(145deg, #0b241b, #102f23 60%, #071a13);
+      padding: 24px 15px 50px;
+    }
+
+    .container {
+      max-width: 650px;
+      margin: 35px auto;
+    }
+
+    header { text-align: center; margin-bottom: 32px; }
+
+    .tree { font-size: 52px; }
+
+    h1 {
+      color: var(--gold);
+      font-size: clamp(34px, 8vw, 54px);
+      margin: 10px 0;
+    }
+
+    .subtitle { color: #d9e7d8; }
+
+    .card {
+      background: rgba(255,250,240,.97);
+      color: #20352a;
+      padding: 28px;
+      border-radius: 20px;
+      box-shadow: 0 15px 45px #0005;
+      margin-bottom: 20px;
+    }
+
+    h2 { color: var(--green); margin-top: 0; }
+
+    input, textarea {
+      width: 100%;
+      padding: 13px;
+      border: 1px solid #d5d8ce;
+      border-radius: 9px;
+      margin: 8px 0 17px;
+      font: inherit;
+      font-size: 15px;
+    }
+
+    textarea { min-height: 150px; resize: vertical; }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      background: var(--red);
+      color: white;
+      border: 0;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    button:hover { filter: brightness(1.1); }
+    button:disabled { opacity: .5; cursor: wait; }
+
+    .secondary {
+      background: var(--green);
+    }
+
+    .result {
+      text-align: center;
+      padding: 30px 10px;
+    }
+
+    .result-name {
+      font-size: clamp(30px, 8vw, 46px);
+      color: var(--red);
+      font-weight: bold;
+      margin: 25px 0;
+      overflow-wrap: anywhere;
+    }
+
+    .present { font-size: 65px; }
+
+    .hidden { display: none !important; }
+
+    .link-row {
+      border: 1px solid #deded2;
+      padding: 13px;
+      border-radius: 10px;
+      margin: 12px 0;
+      overflow-wrap: anywhere;
+    }
+
+    .link-row a {
+      color: #137b43;
+      display: inline-block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #667368;
+    }
+
+    .status { margin: 12px 0; color: #a92932; }
+    footer { text-align: center; color: #c8d8ca; font-size: 13px; }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <header>
+    <div class="tree">🎄✨🎁</div>
+    <h1>Secret Santa</h1>
+    <p class="subtitle">Een beetje kerstmagie begint hier...</p>
+  </header>
+
+  <!-- PERSOONLIJK RESULTAAT -->
+  <section id="resultPage" class="card result hidden">
+    <div class="present">🎁</div>
+    <h2>Jouw geheime kerstpersoon is...</h2>
+    <div id="recipient" class="result-name">...</div>
+    <p>Maak er een prachtig kerstcadeau van! ❤️</p>
+    <p class="small">Psst... verklap het aan niemand!</p>
+  </section>
+
+  <!-- ADMIN LOGIN -->
+  <section id="loginPage" class="card hidden">
+    <h2>🔐 Beheerder login</h2>
+
+    <form id="loginForm">
+      <label>E-mailadres</label>
+      <input type="email" id="email" required>
+
+      <label>Wachtwoord</label>
+      <input type="password" id="password" required>
+
+      <button type="submit">Inloggen</button>
+    </form>
+
+    <p id="loginStatus" class="status"></p>
+  </section>
+
+  <!-- ADMIN DASHBOARD -->
+  <section id="adminPage" class="card hidden">
+    <h2>🎅 Kerstbeheer</h2>
+    <p>Maak een nieuwe geheime loting aan.</p>
+
+    <form id="drawForm">
+      <label>Naam van de loting</label>
+      <input id="eventName"
+             value="Kerstmis 2026"
+             required>
+
+      <label>Deelnemers</label>
+      <textarea id="participants"
+        placeholder="Emma;+32470123456&#10;Lucas;+32470123457&#10;Noah;+32470123458"
+        required></textarea>
+
+      <p class="small">
+        Eén deelnemer per regel. Formaat: naam;telefoonnummer.
+        Telefoonnummer is optioneel. Gebruik het internationale
+        formaat zonder spaties, bijvoorbeeld +32470123456.
+      </p>
+
+      <button type="submit" id="drawButton">
+        🎲 Start de geheime loting
+      </button>
+    </form>
+
+    <p id="drawStatus" class="status"></p>
+
+    <div id="linksContainer" class="hidden">
+      <h2>🎁 Persoonlijke links</h2>
+      <p class="small">
+        Deel elke link uitsluitend met de juiste deelnemer.
+      </p>
+      <div id="linksList"></div>
+    </div>
+
+    <button id="logoutButton" class="secondary">
+      Uitloggen
+    </button>
+  </section>
+
+  <footer>
+    <p>Made with ❤️ and Christmas magic</p>
+  </footer>
+</div>
+
+<script>
+  // VUL HIER JE EIGEN SUPABASE GEGEVENS IN
+  const SUPABASE_URL = "JOUW_SUPABASE_PROJECT_URL";
+  const SUPABASE_KEY = "JOUW_SUPABASE_ANON_KEY";
+
+  const db = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+
+  const $ = id => document.getElementById(id);
+
+  function show(id) {
+    ["resultPage", "loginPage", "adminPage"].forEach(page =>
+      $(page).classList.add("hidden")
+    );
+    $(id).classList.remove("hidden");
+  }
+
+  async function loadResult(token) {
+    show("resultPage");
+    $("recipient").textContent = "Even geduld...";
+
+    const { data, error } = await db.functions.invoke("get-result", {
+      body: { token }
+    });
+
+    if (error || !data?.success) {
+      $("recipient").textContent = "Link niet geldig";
+      return;
+    }
+
+    $("recipient").textContent = data.recipient;
+  }
+
+  async function checkAdmin() {
+    const { data: { session } } = await db.auth.getSession();
+
+    if (!session) {
+      show("loginPage");
+      return;
+    }
+
+    // De Edge Function controleert de echte beheerdersrechten.
+    show("adminPage");
+  }
+
+  $("loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+
+    $("loginStatus").textContent = "Bezig met inloggen...";
+
+    const { error } = await db.auth.signInWithPassword({
+      email: $("email").value,
+      password: $("password").value
+    });
+
+    if (error) {
+      $("loginStatus").textContent = "Inloggen mislukt. Controleer je gegevens.";
+      return;
+    }
+
+    show("adminPage");
+  });
+
+  $("drawForm").addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const lines = $("participants").value
+      .split("\n")
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    const people = lines.map(line => {
+      const parts = line.split(";");
+      return {
+        name: parts[0].trim(),
+        phone: (parts[1] || "").trim()
+      };
+    });
+
+    $("drawButton").disabled = true;
+    $("drawStatus").textContent = "🎲 De loting wordt uitgevoerd...";
+    $("linksContainer").classList.add("hidden");
+
+    try {
+      const { data, error } = await db.functions.invoke("create-draw", {
+        body: {
+          eventName: $("eventName").value,
+          participants: people
+        }
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || "Loting mislukt.");
+      }
+
+      $("drawStatus").textContent =
+        "🎄 De loting is succesvol afgerond!";
+
+      $("linksList").replaceChildren();
+
+      data.links.forEach(person => {
+        const row = document.createElement("div");
+        row.className = "link-row";
+
+        const name = document.createElement("strong");
+        name.textContent = person.name;
+
+        const link = document.createElement("p");
+        link.textContent = person.link;
+
+        const share = document.createElement("a");
+        share.textContent = "📱 Verstuur via WhatsApp";
+        share.href = "https://wa.me/" +
+          person.phone.replace(/\D/g, "") +
+          "?text=" + encodeURIComponent(
+            "🎄 Ho ho ho! Je geheime Secret Santa-link is klaar! " +
+            "Ontdek voor wie jij een cadeautje mag kopen: " +
+            person.link
+          );
+
+        share.target = "_blank";
+        share.rel = "noopener noreferrer";
+
+        row.append(name, link);
+
+        if (person.phone) {
+          row.append(share);
+        } else {
+          const copy = document.createElement("button");
+          copy.className = "secondary";
+          copy.textContent = "Kopieer geheime link";
+          copy.onclick = () =>
+            navigator.clipboard.writeText(person.link);
+          row.append(copy);
+        }
+
+        $("linksList").append(row);
+      });
+
+      $("linksContainer").classList.remove("hidden");
+
+    } catch (error) {
+      $("drawStatus").textContent = error.message;
+    } finally {
+      $("drawButton").disabled = false;
+    }
+  });
+
+  $("logoutButton").addEventListener("click", async () => {
+    await db.auth.signOut();
+    show("loginPage");
+  });
+
+  async function start() {
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+
+    if (token) {
+      await loadResult(token);
+      return;
+    }
+
+    if (location.hash.includes("access_token")) {
+      // Supabase Auth verwerkt zijn eigen login callback.
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    await checkAdmin();
+  }
+
+  db.auth.onAuthStateChange((event, session) => {
+    if (!location.search.includes("token=")) {
+      if (session) show("adminPage");
+      else if (event === "SIGNED_OUT") show("loginPage");
+    }
+  });
+
+  start();
+</script>
+</body>
+</html>
